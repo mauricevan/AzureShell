@@ -6,8 +6,9 @@ import { TileGrid } from '@/components/TileGrid'
 export default function Home() {
   const { isAuthenticated, userDetails, isLoading } = useAuth()
 
-  const handleLogin = () => {
-    window.location.href = '/.auth/login/aad'
+  const handleLogin = (e?: React.MouseEvent) => {
+    e?.preventDefault()
+    window.location.assign('/.auth/login/aad')
   }
 
   if (isLoading) {
@@ -26,12 +27,13 @@ export default function Home() {
           <p className="text-gray-600 text-center mb-8">
             Sign in with your work account to access your personalized portal
           </p>
-          <button
+          <a
+            href="/.auth/login/aad"
             onClick={handleLogin}
-            className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+            className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 transition-colors font-medium text-center block cursor-pointer"
           >
             Sign In
-          </button>
+          </a>
         </div>
       </div>
     )

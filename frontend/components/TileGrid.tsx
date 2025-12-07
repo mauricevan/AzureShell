@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useMsal } from '@azure/msal-react'
+import { useAuth } from '@/lib/useAuth'
 import { tileApi, Tile } from '@/lib/api'
 import { TileCard } from './TileCard'
 import { AddTileButton } from './AddTileButton'
@@ -11,32 +11,56 @@ interface TileGridProps {
 }
 
 export function TileGrid({ userId }: TileGridProps) {
-  const { instance, accounts } = useMsal()
+  const { accessToken } = useAuth()
   const [tiles, setTiles] = useState<Tile[]>([])
   const [loading, setLoading] = useState(true)
   const [catalog, setCatalog] = useState<Tile[]>([])
 
   useEffect(() => {
-    loadTiles()
-  }, [userId])
+    if (!userId) {
+      setLoading(false)
+      return
+    }
 
-  const getAccessToken = async () => {
-    const account = accounts[0]
-    if (!account) return null
+    if (accessToken) {
+      loadTiles()
+    } else {
+      // If no token available, try to get it from /.auth/me
+      fetchAccessToken()
+    }
+  }, [userId, accessToken])
 
-    const response = await instance.acquireTokenSilent({
-      scopes: ['User.Read'],
-      account,
-    })
-
-    return response.accessToken
+  const fetchAccessToken = async () => {
+    try {
+      const response = await fetch('/.auth/me')
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Auth data:', data) // Debug log
+        
+        // Azure Static Web Apps provides accessToken or idToken
+        const token = data.accessToken || data.idToken || 
+                     (data.clientPrincipal?.claims?.find((c: any) => c.typ === 'id_token')?.val)
+        
+        if (token) {
+          // Token is available, reload tiles
+          loadTilesWithToken(token)
+        } else {
+          console.error('No token found in auth response:', data)
+          setLoading(false)
+        }
+      } else {
+        console.error('Failed to fetch auth:', response.status, response.statusText)
+        setLoading(false)
+      }
+    } catch (error) {
+      console.error('Failed to fetch access token:', error)
+      setLoading(false)
+    }
   }
 
-  const loadTiles = async () => {
+  const loadTilesWithToken = async (token: string) => {
     try {
-      const token = await getAccessToken()
-      if (!token) return
-
+      console.log('Loading tiles with token for userId:', userId)
       const [userTiles, catalogTiles] = await Promise.all([
         tileApi.getUserTiles(token, userId),
         tileApi.getCatalog(token),
@@ -45,19 +69,33 @@ export function TileGrid({ userId }: TileGridProps) {
       setTiles(userTiles.sort((a, b) => a.order - b.order))
       setCatalog(catalogTiles)
       setLoading(false)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load tiles:', error)
+      if (error.response) {
+        console.error('API Error:', error.response.status, error.response.data)
+      }
       setLoading(false)
     }
   }
 
+  const loadTiles = async () => {
+    if (!accessToken) {
+      setLoading(false)
+      return
+    }
+    await loadTilesWithToken(accessToken)
+  }
+
   const handleAddTile = async (tileId: string) => {
     try {
-      const token = await getAccessToken()
-      if (!token) return
+      const token = accessToken || await getTokenFromAuth()
+      if (!token) {
+        console.error('No access token available')
+        return
+      }
 
       await tileApi.addTile(token, userId, tileId)
-      await loadTiles()
+      await loadTilesWithToken(token)
     } catch (error) {
       console.error('Failed to add tile:', error)
     }
@@ -65,14 +103,30 @@ export function TileGrid({ userId }: TileGridProps) {
 
   const handleRemoveTile = async (tileId: string) => {
     try {
-      const token = await getAccessToken()
-      if (!token) return
+      const token = accessToken || await getTokenFromAuth()
+      if (!token) {
+        console.error('No access token available')
+        return
+      }
 
       await tileApi.removeTile(token, userId, tileId)
-      await loadTiles()
+      await loadTilesWithToken(token)
     } catch (error) {
       console.error('Failed to remove tile:', error)
     }
+  }
+
+  const getTokenFromAuth = async (): Promise<string | null> => {
+    try {
+      const response = await fetch('/.auth/me')
+      if (response.ok) {
+        const data = await response.json()
+        return data.accessToken || null
+      }
+    } catch (error) {
+      console.error('Failed to get token:', error)
+    }
+    return null
   }
 
   if (loading) {
@@ -108,4 +162,5 @@ export function TileGrid({ userId }: TileGridProps) {
     </div>
   )
 }
+
 

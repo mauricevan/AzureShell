@@ -10,6 +10,7 @@ interface UserDetails {
 export function useAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null)
+  const [accessToken, setAccessToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -24,6 +25,18 @@ export function useAuth() {
               userId: data.clientPrincipal.userId,
               name: data.clientPrincipal.userDetails,
             })
+            // Azure Static Web Apps provides accessToken in the response
+            if (data.accessToken) {
+              setAccessToken(data.accessToken)
+            } else if (data.clientPrincipal.claims) {
+              // Try to extract token from claims if available
+              const tokenClaim = data.clientPrincipal.claims.find(
+                (claim: any) => claim.typ === 'access_token' || claim.typ === 'id_token'
+              )
+              if (tokenClaim) {
+                setAccessToken(tokenClaim.val)
+              }
+            }
           }
         }
       } catch (error) {
@@ -35,6 +48,6 @@ export function useAuth() {
     fetchAuth()
   }, [])
 
-  return { isAuthenticated, userDetails, isLoading }
+  return { isAuthenticated, userDetails, accessToken, isLoading }
 }
 

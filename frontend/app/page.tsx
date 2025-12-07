@@ -1,26 +1,21 @@
 'use client'
 
-import { useMsal } from '@azure/msal-react'
-import { useIsAuthenticated } from '@azure/msal-react'
-import { loginRequest } from '@/lib/msalConfig'
+import { useAuth } from '@/lib/useAuth'
 import { TileGrid } from '@/components/TileGrid'
-import { useEffect, useState } from 'react'
 
 export default function Home() {
-  const { instance, accounts } = useMsal()
-  const isAuthenticated = useIsAuthenticated()
-  const [userId, setUserId] = useState<string>('')
-
-  useEffect(() => {
-    if (isAuthenticated && accounts.length > 0) {
-      setUserId(accounts[0].homeAccountId)
-    }
-  }, [isAuthenticated, accounts])
+  const { isAuthenticated, userDetails, isLoading } = useAuth()
 
   const handleLogin = () => {
-    instance.loginPopup(loginRequest).catch((e) => {
-      console.error('Login failed:', e)
-    })
+    window.location.href = '/.auth/login/aad'
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {
@@ -48,9 +43,9 @@ export default function Home() {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <h2 className="text-xl font-semibold">Employee Portal</h2>
           <div className="flex items-center gap-4">
-            <span className="text-gray-600">{accounts[0]?.name}</span>
+            <span className="text-gray-600">{userDetails?.name}</span>
             <button
-              onClick={() => instance.logoutPopup()}
+              onClick={() => (window.location.href = '/.auth/logout')}
               className="text-sm text-gray-600 hover:text-gray-900"
             >
               Sign Out
@@ -58,8 +53,7 @@ export default function Home() {
           </div>
         </div>
       </nav>
-      <TileGrid userId={userId} />
+      <TileGrid userId={userDetails?.userId || ''} />
     </div>
   )
 }
-

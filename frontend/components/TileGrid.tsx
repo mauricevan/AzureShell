@@ -61,6 +61,12 @@ export function TileGrid({ userId }: TileGridProps) {
   const loadTilesWithToken = async (token: string) => {
     try {
       console.log('Loading tiles with token for userId:', userId)
+      if (!userId) {
+        console.error('No userId available')
+        setLoading(false)
+        return
+      }
+      
       const [userTiles, catalogTiles] = await Promise.all([
         tileApi.getUserTiles(token, userId),
         tileApi.getCatalog(token),
@@ -73,7 +79,13 @@ export function TileGrid({ userId }: TileGridProps) {
       console.error('Failed to load tiles:', error)
       if (error.response) {
         console.error('API Error:', error.response.status, error.response.data)
+        if (error.response.status === 403) {
+          console.error('Access forbidden - user may not exist in database or userId mismatch')
+        }
       }
+      // Set empty arrays on error so UI can still render
+      setTiles([])
+      setCatalog([])
       setLoading(false)
     }
   }

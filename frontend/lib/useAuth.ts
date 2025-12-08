@@ -21,21 +21,59 @@ export function useAuth() {
           const data = await response.json()
           if (data.clientPrincipal) {
             setIsAuthenticated(true)
-            setUserDetails({
-              userId: data.clientPrincipal.userId,
-              name: data.clientPrincipal.userDetails,
-            })
+            
             // Azure Static Web Apps provides accessToken in the response
-            if (data.accessToken) {
-              setAccessToken(data.accessToken)
-            } else if (data.clientPrincipal.claims) {
+            let token = data.accessToken
+            if (!token && data.clientPrincipal.claims) {
               // Try to extract token from claims if available
               const tokenClaim = data.clientPrincipal.claims.find(
                 (claim: any) => claim.typ === 'access_token' || claim.typ === 'id_token'
               )
               if (tokenClaim) {
-                setAccessToken(tokenClaim.val)
+                token = tokenClaim.val
               }
+            }
+            
+            if (token) {
+              setAccessToken(token)
+              
+              // Fetch user from backend to get the internal userId
+              try {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+                const userResponse = await fetch(`${apiUrl}/api/users/me`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`
+                  }
+                })
+                
+                if (userResponse.ok) {
+                  const userData = await userResponse.json()
+                  setUserDetails({
+                    userId: userData.id, // Internal database userId
+                    name: userData.displayName || data.clientPrincipal.userDetails,
+                  })
+                } else {
+                  // Fallback to Azure AD object ID if backend call fails
+                  console.warn('Failed to fetch user from backend, using Azure AD object ID')
+                  setUserDetails({
+                    userId: data.clientPrincipal.userId,
+                    name: data.clientPrincipal.userDetails,
+                  })
+                }
+              } catch (error) {
+                console.error('Error fetching user from backend:', error)
+                // Fallback to Azure AD object ID
+                setUserDetails({
+                  userId: data.clientPrincipal.userId,
+                  name: data.clientPrincipal.userDetails,
+                })
+              }
+            } else {
+              // No token available, use Azure AD object ID as fallback
+              setUserDetails({
+                userId: data.clientPrincipal.userId,
+                name: data.clientPrincipal.userDetails,
+              })
             }
           }
         }
